@@ -16,6 +16,7 @@ add_executable(kernelgate-agent
     src/RiskEvaluator.cpp
     src/Incident.cpp
     src/Correlator.cpp
+    src/AuditStore.cpp
 )
 
 target_include_directories(kernelgate-agent

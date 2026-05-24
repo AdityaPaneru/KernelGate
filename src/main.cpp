@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "AuditStore.hpp"
 #include "Correlator.hpp"
 #include "Event.hpp"
 #include "Incident.hpp"
@@ -14,12 +15,19 @@ int main() {
     try {
         nlohmann::json startup = {
             {"project", "KernelGate"},
-            {"module", "phase-2-incident-correlation"},
+            {"module", "phase-3-sqlite-audit-store"},
             {"status", "running"},
             {"goal", "C++ endpoint runtime policy engine"}
         };
 
         std::cout << startup.dump(4) << "\n\n";
+
+        const std::string db_path = "kernelgate.db";
+        kernelgate::AuditStore audit_store(db_path);
+        audit_store.initialize();
+
+        std::cout << "[AUDIT] SQLite audit store initialized at "
+                  << db_path << "\n\n";
 
         const std::string policy_file = "config/runtime_policy.json";
         const auto policy = kernelgate::loadPolicyFromFile(policy_file);
@@ -54,6 +62,8 @@ int main() {
         int aggregate_risk_score = 0;
 
         for (const auto& event : events) {
+            audit_store.insertRawEvent(event);
+
             std::cout << "[EVENT] " << event.event_id
                       << " | type=" << kernelgate::eventTypeToString(event.event_type)
                       << " | pid=" << event.pid
@@ -84,10 +94,13 @@ int main() {
         kernelgate::Correlator correlator(policy);
         const auto incidents = correlator.correlate(evaluated_events);
 
-        std::cout << "================ KernelGate Phase 2 Incidents ================\n";
+        std::cout << "================ KernelGate Phase 3 Incidents ================\n";
         std::cout << "Incidents generated: " << incidents.size() << "\n\n";
 
         for (const auto& incident : incidents) {
+            audit_store.insertIncident(incident);
+            audit_store.insertIncidentRuleMatches(incident);
+
             std::cout << "[INCIDENT] " << incident.incident_id << "\n";
             std::cout << "  PID: " << incident.pid << "\n";
             std::cout << "  Process: " << incident.process_name << "\n";
@@ -109,13 +122,14 @@ int main() {
             std::cout << "\n";
         }
 
-        std::cout << "================ KernelGate Phase 2 Summary ==================\n";
+        std::cout << "================ KernelGate Phase 3 Summary ==================\n";
         std::cout << "Events processed: " << events.size() << "\n";
         std::cout << "Aggregate event risk score: " << aggregate_risk_score << "\n";
         std::cout << "Incidents generated: " << incidents.size() << "\n";
+        std::cout << "Audit database: " << db_path << "\n";
         std::cout << "==============================================================\n\n";
 
-        std::cout << "KernelGate Phase 2 incident correlation completed successfully.\n";
+        std::cout << "KernelGate Phase 3 SQLite audit completed successfully.\n";
         return 0;
 
     } catch (const std::exception& ex) {
