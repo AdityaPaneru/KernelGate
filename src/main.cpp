@@ -4,7 +4,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "Correlator.hpp"
 #include "Event.hpp"
+#include "Incident.hpp"
 #include "Policy.hpp"
 #include "RiskEvaluator.hpp"
 
@@ -12,7 +14,7 @@ int main() {
     try {
         nlohmann::json startup = {
             {"project", "KernelGate"},
-            {"module", "phase-1-risk-evaluation"},
+            {"module", "phase-2-incident-correlation"},
             {"status", "running"},
             {"goal", "C++ endpoint runtime policy engine"}
         };
@@ -46,8 +48,10 @@ int main() {
 
         kernelgate::RiskEvaluator evaluator(policy);
 
+        std::vector<kernelgate::EvaluationResult> evaluated_events;
+        evaluated_events.reserve(events.size());
+
         int aggregate_risk_score = 0;
-        std::vector<kernelgate::RuleMatch> aggregate_matches;
 
         for (const auto& event : events) {
             std::cout << "[EVENT] " << event.event_id
@@ -57,6 +61,7 @@ int main() {
                       << "\n";
 
             const auto result = evaluator.evaluate(event);
+            evaluated_events.push_back(result);
 
             if (result.matches.empty()) {
                 std::cout << "  [MATCH] none\n";
@@ -67,8 +72,6 @@ int main() {
                               << " | severity=" << match.severity
                               << " | reason=" << match.reason
                               << "\n";
-
-                    aggregate_matches.push_back(match);
                 }
             }
 
@@ -78,17 +81,41 @@ int main() {
             aggregate_risk_score += result.total_risk_score;
         }
 
-        const std::string overall_verdict =
-            evaluator.verdictForScore(aggregate_risk_score);
+        kernelgate::Correlator correlator(policy);
+        const auto incidents = correlator.correlate(evaluated_events);
 
-        std::cout << "================ KernelGate Phase 1 Summary ================\n";
+        std::cout << "================ KernelGate Phase 2 Incidents ================\n";
+        std::cout << "Incidents generated: " << incidents.size() << "\n\n";
+
+        for (const auto& incident : incidents) {
+            std::cout << "[INCIDENT] " << incident.incident_id << "\n";
+            std::cout << "  PID: " << incident.pid << "\n";
+            std::cout << "  Process: " << incident.process_name << "\n";
+            std::cout << "  Path: " << incident.process_path << "\n";
+            std::cout << "  First seen: " << incident.first_seen << "\n";
+            std::cout << "  Last seen: " << incident.last_seen << "\n";
+            std::cout << "  Chain: " << kernelgate::buildChainSummary(incident) << "\n";
+            std::cout << "  Risk score: " << incident.total_risk_score << "\n";
+            std::cout << "  Verdict: " << incident.verdict << "\n";
+
+            std::cout << "  Matched rules:\n";
+            for (const auto& match : incident.matched_rules) {
+                std::cout << "    - " << match.rule_id
+                          << " | +" << match.risk_points
+                          << " | " << match.reason
+                          << "\n";
+            }
+
+            std::cout << "\n";
+        }
+
+        std::cout << "================ KernelGate Phase 2 Summary ==================\n";
         std::cout << "Events processed: " << events.size() << "\n";
-        std::cout << "Matched rules: " << aggregate_matches.size() << "\n";
-        std::cout << "Total risk score: " << aggregate_risk_score << "\n";
-        std::cout << "Overall verdict: " << overall_verdict << "\n";
-        std::cout << "=============================================================\n\n";
+        std::cout << "Aggregate event risk score: " << aggregate_risk_score << "\n";
+        std::cout << "Incidents generated: " << incidents.size() << "\n";
+        std::cout << "==============================================================\n\n";
 
-        std::cout << "KernelGate Phase 1 risk evaluation completed successfully.\n";
+        std::cout << "KernelGate Phase 2 incident correlation completed successfully.\n";
         return 0;
 
     } catch (const std::exception& ex) {
