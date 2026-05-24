@@ -13,6 +13,7 @@ add_executable(kernelgate-agent
     src/main.cpp
     src/Event.cpp
     src/PolicyLoader.cpp
+    src/RiskEvaluator.cpp
 )
 
 target_include_directories(kernelgate-agent
