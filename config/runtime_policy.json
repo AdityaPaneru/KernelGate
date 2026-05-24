@@ -1,0 +1,35 @@
+{
+  "policy_version": "v1",
+  "mode": "REPORT_ONLY",
+  "risk_thresholds": {
+    "warning": 40,
+    "high": 70,
+    "critical": 90
+  },
+  "rules": [
+    {
+      "rule_id": "EXEC_TMP_001",
+      "name": "Execution from temporary directory",
+      "event_type": "EXEC",
+      "match_path_prefix": ["/tmp", "/dev/shm", "/var/tmp"],
+      "risk_points": 30,
+      "severity": "HIGH"
+    },
+    {
+      "rule_id": "SENSITIVE_FILE_001",
+      "name": "Sensitive file access",
+      "event_type": "FILE_ACCESS",
+      "sensitive_paths": ["/etc/passwd", "/etc/shadow", "/etc/ssh/sshd_config"],
+      "risk_points": 25,
+      "severity": "HIGH"
+    },
+    {
+      "rule_id": "RESTRICTED_PORT_001",
+      "name": "Restricted outbound port connection",
+      "event_type": "NET_CONNECT",
+      "restricted_ports": [4444, 5555, 6666],
+      "risk_points": 25,
+      "severity": "HIGH"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.20)
+project(KernelGate LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(nlohmann_json REQUIRED)
+find_package(SQLite3 REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+add_executable(kernelgate-agent
+    src/main.cpp
+    src/Event.cpp
+)
+
+target_include_directories(kernelgate-agent
+    PRIVATE
+    include
+)
+
+target_link_libraries(kernelgate-agent
+    PRIVATE
+    nlohmann_json::nlohmann_json
+    SQLite::SQLite3
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)

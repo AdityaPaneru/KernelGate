@@ -1,0 +1,38 @@
+[
+  {
+    "event_id": "EVT-001",
+    "event_type": "EXEC",
+    "timestamp": "2026-05-24T10:00:00Z",
+    "pid": 3101,
+    "ppid": 2100,
+    "uid": 1000,
+    "process_name": "bash",
+    "process_path": "/usr/bin/bash",
+    "command_line": "bash /tmp/suspicious.sh"
+  },
+  {
+    "event_id": "EVT-002",
+    "event_type": "FILE_ACCESS",
+    "timestamp": "2026-05-24T10:00:02Z",
+    "pid": 3101,
+    "ppid": 2100,
+    "uid": 1000,
+    "process_name": "bash",
+    "process_path": "/usr/bin/bash",
+    "command_line": "bash /tmp/suspicious.sh",
+    "file_path": "/etc/passwd"
+  },
+  {
+    "event_id": "EVT-003",
+    "event_type": "NET_CONNECT",
+    "timestamp": "2026-05-24T10:00:04Z",
+    "pid": 3101,
+    "ppid": 2100,
+    "uid": 1000,
+    "process_name": "bash",
+    "process_path": "/usr/bin/bash",
+    "command_line": "bash /tmp/suspicious.sh",
+    "dest_ip": "192.168.1.50",
+    "dest_port": 4444
+  }
+]
