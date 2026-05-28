@@ -36,3 +36,31 @@ target_link_libraries(kernelgate-agent
     OpenSSL::Crypto
     CURL::libcurl
 )
+
+
+add_executable(kernelgate-fanotify-demo
+    src/fanotify_demo.cpp
+    src/Event.cpp
+    src/PolicyLoader.cpp
+    src/RiskEvaluator.cpp
+    src/Incident.cpp
+    src/Correlator.cpp
+    src/AuditStore.cpp
+    src/ProcEnricher.cpp
+    src/RunContext.cpp
+    src/FileTelemetry.cpp
+)
+
+target_include_directories(kernelgate-fanotify-demo
+    PRIVATE
+    include
+)
+
+target_link_libraries(kernelgate-fanotify-demo
+    PRIVATE
+    nlohmann_json::nlohmann_json
+    SQLite::SQLite3
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    CURL::libcurl
+)
