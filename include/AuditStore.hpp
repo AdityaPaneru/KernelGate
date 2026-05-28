@@ -1,7 +1,7 @@
 #pragma once
 
+#include <optional>
 #include <string>
-#include <vector>
 
 #include <sqlite3.h>
 
@@ -20,9 +20,12 @@ public:
 
     void initialize();
 
-    void insertRawEvent(const KernelEvent& event);
-    void insertIncident(const Incident& incident);
-    void insertIncidentRuleMatches(const Incident& incident);
+    void insertRawEvent(const KernelEvent& event, const std::string& run_id);
+    void insertIncident(const Incident& incident, const std::string& run_id);
+    void insertIncidentRuleMatches(
+        const Incident& incident,
+        const std::string& run_id
+    );
 
 private:
     sqlite3* db_ = nullptr;
@@ -31,6 +34,12 @@ private:
     void execute(const std::string& sql);
     void open();
     void close();
+
+    void ensureColumnExists(
+        const std::string& table_name,
+        const std::string& column_name,
+        const std::string& column_definition
+    );
 
     static std::string optionalStringValue(
         const std::optional<std::string>& value

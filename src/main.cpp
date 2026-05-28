@@ -14,6 +14,7 @@
 #include "Policy.hpp"
 #include "ProcEnricher.hpp"
 #include "RiskEvaluator.hpp"
+#include "RunContext.hpp"
 
 namespace {
 
@@ -139,12 +140,15 @@ void resetDatabaseIfRequested(const CliOptions& options) {
 int runDefaultPipeline(const CliOptions& options) {
     nlohmann::json startup = {
         {"project", "KernelGate"},
-        {"module", "phase-5-demo-cli"},
+        {"module", "phase-6-run-id-audit"},
         {"status", "running"},
         {"goal", "C++ endpoint runtime policy engine"}
     };
 
     std::cout << startup.dump(4) << "\n\n";
+
+    const std::string run_id = kernelgate::generateRunId();
+    std::cout << "[RUN] Run ID: " << run_id << "\n\n";
 
     resetDatabaseIfRequested(options);
 
@@ -185,7 +189,7 @@ int runDefaultPipeline(const CliOptions& options) {
     int aggregate_risk_score = 0;
 
     for (const auto& event : events) {
-        audit_store.insertRawEvent(event);
+        audit_store.insertRawEvent(event, run_id);
 
         std::cout << "[EVENT] " << event.event_id
                   << " | type=" << kernelgate::eventTypeToString(event.event_type)
@@ -217,12 +221,12 @@ int runDefaultPipeline(const CliOptions& options) {
     kernelgate::Correlator correlator(policy);
     const auto incidents = correlator.correlate(evaluated_events);
 
-    std::cout << "================ KernelGate Phase 5 Incidents ================\n";
+    std::cout << "================ KernelGate Phase 6 Incidents ================\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n\n";
 
     for (const auto& incident : incidents) {
-        audit_store.insertIncident(incident);
-        audit_store.insertIncidentRuleMatches(incident);
+        audit_store.insertIncident(incident, run_id);
+        audit_store.insertIncidentRuleMatches(incident, run_id);
 
         std::cout << "[INCIDENT] " << incident.incident_id << "\n";
         std::cout << "  PID: " << incident.pid << "\n";
@@ -245,16 +249,17 @@ int runDefaultPipeline(const CliOptions& options) {
         std::cout << "\n";
     }
 
-    std::cout << "================ KernelGate Phase 5 Summary ==================\n";
+    std::cout << "================ KernelGate Phase 6 Summary ==================\n";
     std::cout << "Events processed: " << events.size() << "\n";
     std::cout << "Aggregate event risk score: " << aggregate_risk_score << "\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n";
     std::cout << "Audit database: " << options.db_path << "\n";
+    std::cout << "Run ID: " << run_id << "\n";
     std::cout << "Event file: " << options.event_file << "\n";
     std::cout << "Policy file: " << options.policy_file << "\n";
     std::cout << "==============================================================\n\n";
 
-    std::cout << "KernelGate Phase 5 demo CLI completed successfully.\n";
+    std::cout << "KernelGate Phase 6 run ID audit tracking completed successfully.\n";
     return 0;
 }
 

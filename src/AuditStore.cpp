@@ -1,7 +1,7 @@
 #include "AuditStore.hpp"
 
-#include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace kernelgate {
 
@@ -46,10 +46,48 @@ void AuditStore::execute(const std::string& sql) {
     }
 }
 
+void AuditStore::ensureColumnExists(
+    const std::string& table_name,
+    const std::string& column_name,
+    const std::string& column_definition
+) {
+    sqlite3_stmt* stmt = nullptr;
+
+    const std::string pragma_sql = "PRAGMA table_info(" + table_name + ");";
+
+    if (sqlite3_prepare_v2(db_, pragma_sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error(
+            "Failed to inspect table schema: " +
+            std::string(sqlite3_errmsg(db_))
+        );
+    }
+
+    bool exists = false;
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* name_text = sqlite3_column_text(stmt, 1);
+
+        if (name_text != nullptr && column_name == reinterpret_cast<const char*>(name_text)) {
+            exists = true;
+            break;
+        }
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (!exists) {
+        execute(
+            "ALTER TABLE " + table_name +
+            " ADD COLUMN " + column_name + " " + column_definition + ";"
+        );
+    }
+}
+
 void AuditStore::initialize() {
     execute(
         "CREATE TABLE IF NOT EXISTS raw_events ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "run_id TEXT,"
         "event_id TEXT NOT NULL,"
         "event_type TEXT NOT NULL,"
         "timestamp TEXT,"
@@ -68,6 +106,7 @@ void AuditStore::initialize() {
     execute(
         "CREATE TABLE IF NOT EXISTS incidents ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "run_id TEXT,"
         "incident_id TEXT NOT NULL,"
         "pid INTEGER,"
         "uid INTEGER,"
@@ -84,6 +123,7 @@ void AuditStore::initialize() {
     execute(
         "CREATE TABLE IF NOT EXISTS incident_rule_matches ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "run_id TEXT,"
         "incident_id TEXT NOT NULL,"
         "rule_id TEXT,"
         "rule_name TEXT,"
@@ -92,6 +132,10 @@ void AuditStore::initialize() {
         "reason TEXT"
         ");"
     );
+
+    ensureColumnExists("raw_events", "run_id", "TEXT");
+    ensureColumnExists("incidents", "run_id", "TEXT");
+    ensureColumnExists("incident_rule_matches", "run_id", "TEXT");
 }
 
 std::string AuditStore::optionalStringValue(
@@ -106,14 +150,17 @@ int AuditStore::optionalIntValue(
     return value.has_value() ? value.value() : -1;
 }
 
-void AuditStore::insertRawEvent(const KernelEvent& event) {
+void AuditStore::insertRawEvent(
+    const KernelEvent& event,
+    const std::string& run_id
+) {
     sqlite3_stmt* stmt = nullptr;
 
     const char* sql =
         "INSERT INTO raw_events ("
-        "event_id, event_type, timestamp, pid, ppid, uid, "
+        "run_id, event_id, event_type, timestamp, pid, ppid, uid, "
         "process_name, process_path, command_line, file_path, dest_ip, dest_port"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         throw std::runtime_error(
@@ -127,18 +174,19 @@ void AuditStore::insertRawEvent(const KernelEvent& event) {
     const std::string dest_ip = optionalStringValue(event.dest_ip);
     const int dest_port = optionalIntValue(event.dest_port);
 
-    sqlite3_bind_text(stmt, 1, event.event_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, event_type.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, event.timestamp.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 4, event.pid);
-    sqlite3_bind_int(stmt, 5, event.ppid);
-    sqlite3_bind_int(stmt, 6, event.uid);
-    sqlite3_bind_text(stmt, 7, event.process_name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 8, event.process_path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 9, event.command_line.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 10, file_path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 11, dest_ip.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 12, dest_port);
+    sqlite3_bind_text(stmt, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, event.event_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, event_type.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, event.timestamp.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 5, event.pid);
+    sqlite3_bind_int(stmt, 6, event.ppid);
+    sqlite3_bind_int(stmt, 7, event.uid);
+    sqlite3_bind_text(stmt, 8, event.process_name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 9, event.process_path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 10, event.command_line.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 11, file_path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 12, dest_ip.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 13, dest_port);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string error = sqlite3_errmsg(db_);
@@ -149,14 +197,17 @@ void AuditStore::insertRawEvent(const KernelEvent& event) {
     sqlite3_finalize(stmt);
 }
 
-void AuditStore::insertIncident(const Incident& incident) {
+void AuditStore::insertIncident(
+    const Incident& incident,
+    const std::string& run_id
+) {
     sqlite3_stmt* stmt = nullptr;
 
     const char* sql =
         "INSERT INTO incidents ("
-        "incident_id, pid, uid, process_name, process_path, "
+        "run_id, incident_id, pid, uid, process_name, process_path, "
         "first_seen, last_seen, chain_summary, risk_score, verdict"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         throw std::runtime_error(
@@ -167,16 +218,17 @@ void AuditStore::insertIncident(const Incident& incident) {
 
     const std::string chain_summary = buildChainSummary(incident);
 
-    sqlite3_bind_text(stmt, 1, incident.incident_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 2, incident.pid);
-    sqlite3_bind_int(stmt, 3, incident.uid);
-    sqlite3_bind_text(stmt, 4, incident.process_name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 5, incident.process_path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 6, incident.first_seen.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 7, incident.last_seen.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 8, chain_summary.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 9, incident.total_risk_score);
-    sqlite3_bind_text(stmt, 10, incident.verdict.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, incident.incident_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 3, incident.pid);
+    sqlite3_bind_int(stmt, 4, incident.uid);
+    sqlite3_bind_text(stmt, 5, incident.process_name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 6, incident.process_path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 7, incident.first_seen.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 8, incident.last_seen.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 9, chain_summary.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 10, incident.total_risk_score);
+    sqlite3_bind_text(stmt, 11, incident.verdict.c_str(), -1, SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string error = sqlite3_errmsg(db_);
@@ -187,13 +239,16 @@ void AuditStore::insertIncident(const Incident& incident) {
     sqlite3_finalize(stmt);
 }
 
-void AuditStore::insertIncidentRuleMatches(const Incident& incident) {
+void AuditStore::insertIncidentRuleMatches(
+    const Incident& incident,
+    const std::string& run_id
+) {
     sqlite3_stmt* stmt = nullptr;
 
     const char* sql =
         "INSERT INTO incident_rule_matches ("
-        "incident_id, rule_id, rule_name, risk_points, severity, reason"
-        ") VALUES (?, ?, ?, ?, ?, ?);";
+        "run_id, incident_id, rule_id, rule_name, risk_points, severity, reason"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?);";
 
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         throw std::runtime_error(
@@ -206,12 +261,13 @@ void AuditStore::insertIncidentRuleMatches(const Incident& incident) {
         sqlite3_reset(stmt);
         sqlite3_clear_bindings(stmt);
 
-        sqlite3_bind_text(stmt, 1, incident.incident_id.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, match.rule_id.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 3, match.rule_name.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 4, match.risk_points);
-        sqlite3_bind_text(stmt, 5, match.severity.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 6, match.reason.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 1, run_id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, incident.incident_id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, match.rule_id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, match.rule_name.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 5, match.risk_points);
+        sqlite3_bind_text(stmt, 6, match.severity.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 7, match.reason.c_str(), -1, SQLITE_TRANSIENT);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             std::string error = sqlite3_errmsg(db_);

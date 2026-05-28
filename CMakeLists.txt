@@ -18,6 +18,7 @@ add_executable(kernelgate-agent
     src/Correlator.cpp
     src/AuditStore.cpp
     src/ProcEnricher.cpp
+    src/RunContext.cpp
 )
 
 target_include_directories(kernelgate-agent
