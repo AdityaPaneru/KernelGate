@@ -13,3 +13,15 @@ sample_events/live_demo_chain.json
 
 # Python virtual environment
 backend/venv/
+
+# Local assistant/project planning files
+CLAUDE.md
+
+# Private local notes / interview guides
+docs/
+
+# Local assistant/project planning files
+CLAUDE.md
+
+# Private local notes / interview guides
+docs/
