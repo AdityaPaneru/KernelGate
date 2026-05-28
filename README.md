@@ -252,3 +252,14 @@ Future event sources:
 ## Interview Positioning
 
 KernelGate is a modular C++ endpoint runtime policy engine that converts process, file, and network activity into correlated incidents, stores audit evidence locally, enriches process context through /proc, and reports high-risk incidents to a UEM-style control plane.
+
+---
+
+## Optional eBPF Exec Telemetry Demo
+
+KernelGate also includes an optional eBPF-based execution telemetry demo using `bpftrace`.
+
+This demo attaches to the Linux kernel tracepoint:
+
+```text
+tracepoint:syscalls:sys_enter_execve

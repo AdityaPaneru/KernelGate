@@ -1,0 +1,9 @@
+tracepoint:syscalls:sys_enter_execve
+{
+    printf("[EBPF_EXEC] pid=%d uid=%d comm=%s filename=%s\n",
+        pid,
+        uid,
+        comm,
+        str(args->filename)
+    );
+}
