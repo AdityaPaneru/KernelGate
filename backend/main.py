@@ -66,6 +66,15 @@ def list_incidents():
     }
 
 
+@app.post("/reset")
+def reset_incidents():
+    received_incidents.clear()
+    return {
+        "reset": True,
+        "incidents_received": len(received_incidents),
+    }
+
+
 @app.get("/fleet/summary")
 def fleet_summary():
     high_risk_count = sum(
