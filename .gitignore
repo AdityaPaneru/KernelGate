@@ -10,3 +10,6 @@ __pycache__/
 
 # Generated demo artifacts
 sample_events/live_demo_chain.json
+
+# Python virtual environment
+backend/venv/
