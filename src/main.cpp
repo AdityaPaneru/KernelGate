@@ -15,6 +15,7 @@
 #include "ProcEnricher.hpp"
 #include "RiskEvaluator.hpp"
 #include "RunContext.hpp"
+#include "UemClient.hpp"
 
 namespace {
 
@@ -26,6 +27,10 @@ struct CliOptions {
     bool reset_db = false;
     bool inspect_pid_mode = false;
     int inspect_pid = -1;
+
+    bool upload_enabled = false;
+    std::string control_plane_url = "http://127.0.0.1:8000";
+    std::string device_id = "kernelgate-endpoint-01";
 };
 
 void printUsage() {
@@ -36,6 +41,9 @@ void printUsage() {
     std::cout << "  ./build/kernelgate-agent --db <sqlite_db>\n";
     std::cout << "  ./build/kernelgate-agent --reset-db\n";
     std::cout << "  ./build/kernelgate-agent --inspect-pid <pid>\n";
+    std::cout << "  ./build/kernelgate-agent --upload\n";
+    std::cout << "  ./build/kernelgate-agent --control-plane-url <url>\n";
+    std::cout << "  ./build/kernelgate-agent --device-id <id>\n";
     std::cout << "  ./build/kernelgate-agent --help\n";
 }
 
@@ -54,7 +62,6 @@ CliOptions parseArgs(int argc, char* argv[]) {
             if (i + 1 >= argc) {
                 throw std::runtime_error("--events requires a file path");
             }
-
             options.event_file = argv[++i];
             continue;
         }
@@ -63,7 +70,6 @@ CliOptions parseArgs(int argc, char* argv[]) {
             if (i + 1 >= argc) {
                 throw std::runtime_error("--policy requires a file path");
             }
-
             options.policy_file = argv[++i];
             continue;
         }
@@ -72,7 +78,6 @@ CliOptions parseArgs(int argc, char* argv[]) {
             if (i + 1 >= argc) {
                 throw std::runtime_error("--db requires a database path");
             }
-
             options.db_path = argv[++i];
             continue;
         }
@@ -86,9 +91,29 @@ CliOptions parseArgs(int argc, char* argv[]) {
             if (i + 1 >= argc) {
                 throw std::runtime_error("--inspect-pid requires a PID");
             }
-
             options.inspect_pid_mode = true;
             options.inspect_pid = std::stoi(argv[++i]);
+            continue;
+        }
+
+        if (arg == "--upload") {
+            options.upload_enabled = true;
+            continue;
+        }
+
+        if (arg == "--control-plane-url") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--control-plane-url requires a URL");
+            }
+            options.control_plane_url = argv[++i];
+            continue;
+        }
+
+        if (arg == "--device-id") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--device-id requires an ID");
+            }
+            options.device_id = argv[++i];
             continue;
         }
 
@@ -140,7 +165,7 @@ void resetDatabaseIfRequested(const CliOptions& options) {
 int runDefaultPipeline(const CliOptions& options) {
     nlohmann::json startup = {
         {"project", "KernelGate"},
-        {"module", "phase-6-run-id-audit"},
+        {"module", "phase-7-uem-upload"},
         {"status", "running"},
         {"goal", "C++ endpoint runtime policy engine"}
     };
@@ -221,7 +246,7 @@ int runDefaultPipeline(const CliOptions& options) {
     kernelgate::Correlator correlator(policy);
     const auto incidents = correlator.correlate(evaluated_events);
 
-    std::cout << "================ KernelGate Phase 6 Incidents ================\n";
+    std::cout << "================ KernelGate Phase 7 Incidents ================\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n\n";
 
     for (const auto& incident : incidents) {
@@ -246,10 +271,23 @@ int runDefaultPipeline(const CliOptions& options) {
                       << "\n";
         }
 
+        if (options.upload_enabled) {
+            kernelgate::UemClient uem_client(options.control_plane_url);
+            const bool uploaded = uem_client.uploadIncident(
+                incident,
+                run_id,
+                options.device_id
+            );
+
+            if (!uploaded) {
+                std::cerr << "  [UPLOAD] Incident upload failed\n";
+            }
+        }
+
         std::cout << "\n";
     }
 
-    std::cout << "================ KernelGate Phase 6 Summary ==================\n";
+    std::cout << "================ KernelGate Phase 7 Summary ==================\n";
     std::cout << "Events processed: " << events.size() << "\n";
     std::cout << "Aggregate event risk score: " << aggregate_risk_score << "\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n";
@@ -257,9 +295,11 @@ int runDefaultPipeline(const CliOptions& options) {
     std::cout << "Run ID: " << run_id << "\n";
     std::cout << "Event file: " << options.event_file << "\n";
     std::cout << "Policy file: " << options.policy_file << "\n";
+    std::cout << "Upload enabled: " << (options.upload_enabled ? "true" : "false") << "\n";
+    std::cout << "Control plane URL: " << options.control_plane_url << "\n";
     std::cout << "==============================================================\n\n";
 
-    std::cout << "KernelGate Phase 6 run ID audit tracking completed successfully.\n";
+    std::cout << "KernelGate Phase 7 UEM upload completed successfully.\n";
     return 0;
 }
 

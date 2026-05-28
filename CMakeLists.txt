@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(nlohmann_json REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(CURL REQUIRED)
 
 add_executable(kernelgate-agent
     src/main.cpp
@@ -19,6 +20,7 @@ add_executable(kernelgate-agent
     src/AuditStore.cpp
     src/ProcEnricher.cpp
     src/RunContext.cpp
+    src/UemClient.cpp
 )
 
 target_include_directories(kernelgate-agent
@@ -32,4 +34,5 @@ target_link_libraries(kernelgate-agent
     SQLite::SQLite3
     OpenSSL::SSL
     OpenSSL::Crypto
+    CURL::libcurl
 )
