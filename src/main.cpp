@@ -1,6 +1,8 @@
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -15,10 +17,84 @@
 
 namespace {
 
+struct CliOptions {
+    std::string policy_file = "config/runtime_policy.json";
+    std::string event_file = "sample_events/suspicious_chain.json";
+    std::string db_path = "kernelgate.db";
+
+    bool reset_db = false;
+    bool inspect_pid_mode = false;
+    int inspect_pid = -1;
+};
+
 void printUsage() {
     std::cout << "KernelGate usage:\n";
     std::cout << "  ./build/kernelgate-agent\n";
+    std::cout << "  ./build/kernelgate-agent --events <event_json>\n";
+    std::cout << "  ./build/kernelgate-agent --policy <policy_json>\n";
+    std::cout << "  ./build/kernelgate-agent --db <sqlite_db>\n";
+    std::cout << "  ./build/kernelgate-agent --reset-db\n";
     std::cout << "  ./build/kernelgate-agent --inspect-pid <pid>\n";
+    std::cout << "  ./build/kernelgate-agent --help\n";
+}
+
+CliOptions parseArgs(int argc, char* argv[]) {
+    CliOptions options;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+
+        if (arg == "--help") {
+            printUsage();
+            std::exit(0);
+        }
+
+        if (arg == "--events") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--events requires a file path");
+            }
+
+            options.event_file = argv[++i];
+            continue;
+        }
+
+        if (arg == "--policy") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--policy requires a file path");
+            }
+
+            options.policy_file = argv[++i];
+            continue;
+        }
+
+        if (arg == "--db") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--db requires a database path");
+            }
+
+            options.db_path = argv[++i];
+            continue;
+        }
+
+        if (arg == "--reset-db") {
+            options.reset_db = true;
+            continue;
+        }
+
+        if (arg == "--inspect-pid") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--inspect-pid requires a PID");
+            }
+
+            options.inspect_pid_mode = true;
+            options.inspect_pid = std::stoi(argv[++i]);
+            continue;
+        }
+
+        throw std::runtime_error("Unknown argument: " + arg);
+    }
+
+    return options;
 }
 
 int runInspectPidMode(int pid) {
@@ -43,28 +119,45 @@ int runInspectPidMode(int pid) {
     return 0;
 }
 
-int runDefaultPipeline() {
+void resetDatabaseIfRequested(const CliOptions& options) {
+    if (!options.reset_db) {
+        return;
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(options.db_path, ec);
+
+    if (ec) {
+        throw std::runtime_error(
+            "Failed to reset database " + options.db_path + ": " + ec.message()
+        );
+    }
+
+    std::cout << "[AUDIT] Reset database: " << options.db_path << "\n";
+}
+
+int runDefaultPipeline(const CliOptions& options) {
     nlohmann::json startup = {
         {"project", "KernelGate"},
-        {"module", "phase-4-proc-enrichment"},
+        {"module", "phase-5-demo-cli"},
         {"status", "running"},
         {"goal", "C++ endpoint runtime policy engine"}
     };
 
     std::cout << startup.dump(4) << "\n\n";
 
-    const std::string db_path = "kernelgate.db";
-    kernelgate::AuditStore audit_store(db_path);
+    resetDatabaseIfRequested(options);
+
+    kernelgate::AuditStore audit_store(options.db_path);
     audit_store.initialize();
 
     std::cout << "[AUDIT] SQLite audit store initialized at "
-              << db_path << "\n\n";
+              << options.db_path << "\n\n";
 
-    const std::string policy_file = "config/runtime_policy.json";
-    const auto policy = kernelgate::loadPolicyFromFile(policy_file);
+    const auto policy = kernelgate::loadPolicyFromFile(options.policy_file);
 
     std::cout << "[POLICY] Loaded runtime policy from "
-              << policy_file << "\n";
+              << options.policy_file << "\n";
 
     std::cout << "[POLICY] Version: " << policy.policy_version
               << " | Mode: " << policy.mode << "\n";
@@ -78,12 +171,11 @@ int runDefaultPipeline() {
     std::cout << "[POLICY] Rules loaded: "
               << policy.rules.size() << "\n\n";
 
-    const std::string event_file = "sample_events/suspicious_chain.json";
-    const auto events = kernelgate::loadEventsFromFile(event_file);
+    const auto events = kernelgate::loadEventsFromFile(options.event_file);
 
     std::cout << "[EVENTS] Loaded " << events.size()
               << " synthetic runtime events from "
-              << event_file << "\n\n";
+              << options.event_file << "\n\n";
 
     kernelgate::RiskEvaluator evaluator(policy);
 
@@ -125,7 +217,7 @@ int runDefaultPipeline() {
     kernelgate::Correlator correlator(policy);
     const auto incidents = correlator.correlate(evaluated_events);
 
-    std::cout << "================ KernelGate Phase 4 Incidents ================\n";
+    std::cout << "================ KernelGate Phase 5 Incidents ================\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n\n";
 
     for (const auto& incident : incidents) {
@@ -153,14 +245,16 @@ int runDefaultPipeline() {
         std::cout << "\n";
     }
 
-    std::cout << "================ KernelGate Phase 4 Summary ==================\n";
+    std::cout << "================ KernelGate Phase 5 Summary ==================\n";
     std::cout << "Events processed: " << events.size() << "\n";
     std::cout << "Aggregate event risk score: " << aggregate_risk_score << "\n";
     std::cout << "Incidents generated: " << incidents.size() << "\n";
-    std::cout << "Audit database: " << db_path << "\n";
+    std::cout << "Audit database: " << options.db_path << "\n";
+    std::cout << "Event file: " << options.event_file << "\n";
+    std::cout << "Policy file: " << options.policy_file << "\n";
     std::cout << "==============================================================\n\n";
 
-    std::cout << "KernelGate Phase 4 /proc enrichment support completed successfully.\n";
+    std::cout << "KernelGate Phase 5 demo CLI completed successfully.\n";
     return 0;
 }
 
@@ -168,27 +262,17 @@ int runDefaultPipeline() {
 
 int main(int argc, char* argv[]) {
     try {
-        if (argc == 1) {
-            return runDefaultPipeline();
+        const CliOptions options = parseArgs(argc, argv);
+
+        if (options.inspect_pid_mode) {
+            return runInspectPidMode(options.inspect_pid);
         }
 
-        const std::string command = argv[1];
-
-        if (command == "--inspect-pid") {
-            if (argc != 3) {
-                printUsage();
-                return 1;
-            }
-
-            const int pid = std::stoi(argv[2]);
-            return runInspectPidMode(pid);
-        }
-
-        printUsage();
-        return 1;
+        return runDefaultPipeline(options);
 
     } catch (const std::exception& ex) {
         std::cerr << "KernelGate error: " << ex.what() << "\n";
+        printUsage();
         return 1;
     }
 }

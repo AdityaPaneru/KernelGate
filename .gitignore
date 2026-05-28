@@ -7,3 +7,6 @@ build/
 *.out
 __pycache__/
 .DS_Store
+
+# Generated demo artifacts
+sample_events/live_demo_chain.json
