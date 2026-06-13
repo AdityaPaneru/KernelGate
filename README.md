@@ -28,36 +28,6 @@
 KernelGate is a modular **endpoint detection and response (EDR)** prototype that monitors Linux process behavior — tracking what a process executes, which sensitive files it accesses, and where it connects — then scores that behavior against a JSON policy to generate correlated, risk-ranked incidents.
 
 **The key insight**: three individually "LOW" events (suspicious exec + /etc/passwd read + port 4444 connect) become a single **HIGH** incident when they're all from the same process. That's behavioral chain correlation, not log parsing.
-# KernelGate
-
-> **C++20 Linux Endpoint Runtime Policy Engine**
-> Detect. Correlate. Report. — Built for enterprise endpoint visibility.
-
----
-
-```
- ██╗  ██╗███████╗██████╗ ███╗   ██╗███████╗██╗      ██████╗  █████╗ ████████╗███████╗
- ██║ ██╔╝██╔════╝██╔══██╗████╗  ██║██╔════╝██║     ██╔════╝ ██╔══██╗╚══██╔══╝██╔════╝
- █████╔╝ █████╗  ██████╔╝██╔██╗ ██║█████╗  ██║     ██║  ███╗███████║   ██║   █████╗
- ██╔═██╗ ██╔══╝  ██╔══██╗██║╚██╗██║██╔══╝  ██║     ██║   ██║██╔══██║   ██║   ██╔══╝
- ██║  ██╗███████╗██║  ██║██║ ╚████║███████╗███████╗╚██████╔╝██║  ██║   ██║   ███████╗
- ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝
-```
-
-![Language](https://img.shields.io/badge/Language-C%2B%2B20-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-Linux-orange?style=flat-square)
-![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square)
-![Database](https://img.shields.io/badge/Database-SQLite3-003B57?style=flat-square)
-![Build](https://img.shields.io/badge/Build-CMake%20%2B%20Ninja-red?style=flat-square)
-
-
----
-
-## What is KernelGate?
-
-KernelGate is a modular **endpoint detection and response (EDR)** prototype that monitors Linux process behavior — tracking what a process executes, which sensitive files it accesses, and where it connects — then scores that behavior against a JSON policy to generate correlated, risk-ranked incidents.
-
-**The key insight**: three individually "LOW" events (suspicious exec + /etc/passwd read + port 4444 connect) become a single **HIGH** incident when they're all from the same process. That's behavioral chain correlation, not log parsing.
 
 ---
 
